@@ -223,14 +223,72 @@ class Protocol:
                 self.marker_done = True
 
 
+class PanePalette:
+    """Supply a missing pane palette; preserve overrides and later edits."""
+
+    def __init__(self, target, values):
+        self.target = target
+        self.values = values
+        self.owned = {}
+        self.restore_empty = False
+
+    def read(self, inherited=False):
+        flags = "-pA" if inherited else "-p"
+        output = tmux_read(self.target.socket, ["show-options", flags, "-t",
+                           self.target.pane, "pane-colours"])
+        result = {}
+        for line in output.splitlines():
+            if line == "pane-colours":
+                continue
+            match = re.fullmatch(r"pane-colours\[([0-9]+)\](?:\*)? (.+)", line)
+            if not match:
+                raise CompatError("unexpected pane palette metadata")
+            result[int(match[1])] = match[2].lower()
+        return result
+
+    def start(self):
+        local = tmux_read(self.target.socket, ["show-options", "-p", "-t",
+                          self.target.pane, "pane-colours"])
+        self.restore_empty = local == "pane-colours"
+        existing = self.read(inherited=True)
+        if existing:
+            return  # tmux arrays shadow inheritance as a whole, not per index.
+        # Record before mutation so failed startup can restore its values.
+        self.owned = dict(enumerate(self.values))
+        tmux_read(self.target.socket, ["set-option", "-p", "-t", self.target.pane,
+                  "pane-colours", " ".join(self.values)])
+
+    def close(self):
+        if not self.owned:
+            return
+        try:
+            current = self.read()
+            if current == self.owned:
+                command = ["set-option", "-p" if self.restore_empty else "-pu",
+                           "-t", self.target.pane, "pane-colours"]
+                if self.restore_empty:
+                    command.append("")
+                tmux_read(self.target.socket, command)
+                return
+            for index, value in self.owned.items():
+                if current.get(index) == value:
+                    tmux_read(self.target.socket, ["set-option", "-pu", "-t",
+                              self.target.pane, f"pane-colours[{index}]"])
+        except (CompatError, OSError, UnicodeError):
+            pass  # The pane or its server may already be gone.
+        finally:
+            self.owned.clear()
+
+
 class Bridge:
-    def __init__(self, target, fg, bg):
+    def __init__(self, target, fg, bg, palette=()):
         self.target = target
         self.channel = "mosherdr-palette-" + uuid.uuid4().hex
         self.protocol = Protocol(self.channel)
         self.process = None
         self.selector = selectors.DefaultSelector()
         self.fg, self.bg = fg, bg
+        self.palette = PanePalette(target, palette) if palette else None
 
     def argv(self):
         t = self.target
@@ -240,6 +298,8 @@ class Bridge:
                 "display-message", "-p", self.channel, ";", "wait-for", self.channel]
 
     def start(self, timeout=3.0):
+        if self.palette is not None:
+            self.palette.start()
         try:
             self.process = subprocess.Popen(self.argv(), stdin=subprocess.PIPE,
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -294,3 +354,5 @@ class Bridge:
                 for stream in (process.stdin, process.stdout, process.stderr):
                     stream.close()
             self.selector.close()
+            if self.palette is not None:
+                self.palette.close()

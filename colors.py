@@ -33,7 +33,13 @@ def profile(config=None):
     if colors.get("enabled") is not True:
         return None
     try:
-        return rgb(colors["foreground"]), rgb(colors["background"])
+        defaults = rgb(colors["foreground"]), rgb(colors["background"])
+        if "palette" not in colors:
+            return defaults
+        values = colors["palette"]
+        if not isinstance(values, list) or len(values) != 16:
+            raise ValueError("palette must contain 16 colors")
+        return (*defaults, tuple(rgb(value) for value in values))
     except (KeyError, TypeError, ValueError, argparse.ArgumentTypeError) as exc:
         raise CompatError("a complete explicit palette is required") from exc
 

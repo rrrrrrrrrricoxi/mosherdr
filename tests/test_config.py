@@ -23,6 +23,17 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaises(config.ConfigError):
                 config.validate_colors(profile)
 
+    def test_explicit_palette_requires_exactly_sixteen_rgb_colors(self):
+        palette = ["#%06x" % value for value in range(16)]
+        profile = {"enabled": True, "foreground": "#ffffff", "background": "#000000",
+                   "palette": palette}
+        self.assertEqual(config.validate_colors(profile), profile)
+        for invalid in (palette[:15], palette + ["#000000"], " ".join(palette),
+                        [*palette[:15], "red"], [*palette[:15], 123]):
+            with self.subTest(invalid=invalid if isinstance(invalid, str) else len(invalid)), \
+                    self.assertRaises(config.ConfigError):
+                config.validate_colors({**profile, "palette": invalid})
+
     def test_missing_config_disables_hosts(self):
         with tempfile.TemporaryDirectory() as path:
             self.assertEqual(config.load_config(Path(path) / "missing.json")["hosts"], {})

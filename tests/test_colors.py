@@ -20,6 +20,11 @@ PROFILE = {"colors": {"enabled": True, "foreground": "#123456", "background": "#
 
 
 class ProfileTests(unittest.TestCase):
+    def test_full_palette_reaches_bridge_arguments(self):
+        values = ["#123456"] * 16
+        self.assertEqual(colors.profile({"colors": {**PROFILE["colors"], "palette": values}}),
+                         ("#123456", "#abcdef", tuple(values)))
+
     def test_disabled_or_absent_profile_never_discovers_or_starts(self):
         for data in ({}, {"colors": {"enabled": False}}):
             with mock.patch.object(colors, "discover") as discover:

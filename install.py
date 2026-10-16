@@ -476,6 +476,7 @@ def main(argv=None):
     parser.add_argument("--host")
     parser.add_argument("--foreground")
     parser.add_argument("--background")
+    parser.add_argument("--palette-file", help="JSON file containing an array of 16 #RRGGBB colors")
     parser.add_argument("--migrate-legacy", action="store_true")
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--apply", action="store_true")
@@ -487,8 +488,16 @@ def main(argv=None):
         return 0 if result["verified"] else 1
     config.validate_host(args.host)
     colors = None
+    if args.palette_file is not None and (args.foreground is None or args.background is None):
+        raise InstallError("--palette-file requires both --foreground and --background")
     if args.foreground is not None or args.background is not None:
-        colors = config.validate_colors({"enabled": True, "foreground": args.foreground, "background": args.background})
+        colors = {"enabled": True, "foreground": args.foreground, "background": args.background}
+        if args.palette_file is not None:
+            try:
+                colors["palette"] = json.loads(Path(args.palette_file).read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise InstallError("palette file must contain a JSON array of 16 #RRGGBB colors") from exc
+        colors = config.validate_colors(colors)
     source = Path(__file__).resolve().parent
     commit = clean_commit(source)
     verify(source)

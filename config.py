@@ -29,7 +29,7 @@ def validate_host(host):
 def validate_colors(profile):
     if not isinstance(profile, dict):
         raise ConfigError("colors must be an object")
-    if set(profile) - {"enabled", "foreground", "background"}:
+    if set(profile) - {"enabled", "foreground", "background", "palette"}:
         raise ConfigError("unknown color setting")
     enabled = profile.get("enabled", False)
     if type(enabled) is not bool:
@@ -38,6 +38,11 @@ def validate_colors(profile):
         value = profile.get(name)
         if (enabled or value is not None) and (not isinstance(value, str) or not RGB.fullmatch(value)):
             raise ConfigError("color profiles require foreground and background in #RRGGBB form")
+    if "palette" in profile:
+        palette = profile["palette"]
+        if (not isinstance(palette, list) or len(palette) != 16
+                or any(not isinstance(color, str) or not RGB.fullmatch(color) for color in palette)):
+            raise ConfigError("colors.palette must contain exactly 16 values in #RRGGBB form")
     return dict(profile)
 
 

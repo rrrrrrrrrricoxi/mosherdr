@@ -18,9 +18,18 @@ The remote interactive zsh hook runs a color check before each command. The help
 
 For a configured explicit foreground/background pair, a small owner process sends OSC 10 and OSC 11 color reports through remote tmux's control mode to that client. The remote tmux must support `refresh-client -r`. A marker and protocol acknowledgements ensure the reports are processed before a newly launched command starts. The bridge tracks the original pane and client; it does not read pane contents. If that client stops selecting the pane or multiple visual clients create a conflict, the daemon closes its bridge and remains dormant. It resumes only when the same client selects the same pane and the view is unambiguous again. The daemon ends when the original client detaches, the pane closes, the client identity changes, or the configured profile changes.
 
+When the profile includes all 16 ANSI colors, the bridge also sets a temporary
+pane-local `pane-colours` array before reporting readiness. tmux's
+`refresh-client -r` handles only foreground/background, so OSC 4 palette queries
+need this separate native mechanism. Existing nonempty local or inherited arrays
+are preserved. On normal cleanup, the bridge restores its previous empty-array
+state or removes its array; later user edits are preserved. Abrupt termination
+such as SIGKILL can leave the temporary pane defaults until that pane closes.
+The bridge does not change application-set OSC 4 overrides or global tmux options.
+
 The profile is opt-in and per host. The bridge preserves terminal themes by reporting the explicit configured colors, honors `NO_COLOR`, and never sets `FORCE_COLOR`. The shell hook sets `COLORTERM=truecolor` only when the verified client negotiated RGB and no `NO_COLOR` or existing `COLORTERM` value blocks it. It removes only the value it added, at the next prompt, and preserves later user changes. A palette-only terminal receives the color reports without an RGB claim.
 
-Multiple visual clients in a window make one shared default color ambiguous. The helper declines that case. Other unsupported or uncertain states stop color reports. Closing mosherdr's control client does not guarantee that tmux clears a cached palette while other control clients remain attached. A client that attaches while a TUI is already running cannot trigger the shell's pre-command check, so that TUI receives no new color report. After returning to the shell, a new command triggers the check for programs launched afterward. Generic color behavior has not yet been verified in a live session.
+Multiple visual clients in a window make one shared default color ambiguous. The helper declines that case. Other unsupported or uncertain states stop color reports. Closing mosherdr's control client does not guarantee that tmux clears a cached palette while other control clients remain attached. A client that attaches while a TUI is already running cannot trigger the shell's pre-command check, so that TUI receives no new color report. After returning to the shell, a new command triggers the check for programs launched afterward. See testing.md for the current live verification scope.
 
 ## Installer boundary
 

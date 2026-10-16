@@ -4,9 +4,9 @@ mosherdr is a small compatibility package for agent badges in Herdr and terminal
 
 The agent watcher uses Herdr's local API and read-only SSH probes to identify the visible agent in the foreground tmux pane. It reads process, socket, and tmux metadata. On the local machine, it reads the Mosh client's argument vector to identify and pin the connection endpoint. It does not inspect terminal contents or prompts, and it does not log arguments, environment values, or credentials. If the watcher cannot verify one agent, it hides its badge. A Herdr API failure during cleanup can leave a stale badge until Herdr clears it.
 
-The optional color bridge sends an explicit foreground and background profile through remote tmux's terminal-color protocol before remote programs launch. It respects terminal themes and `NO_COLOR`. It does not set `FORCE_COLOR`, replace agent launchers, or claim RGB support for every terminal. Color reporting is disabled until both colors are configured. The bridge becomes dormant when its original client stops selecting the pane or its view becomes ambiguous; it resumes for that same client and pane when they become eligible again. It does not promise that tmux clears a previously cached palette when the bridge closes.
+The optional color bridge sends an explicit foreground, background, and optional 16-color palette profile through remote tmux's terminal-color protocol before remote programs launch. It respects terminal themes and `NO_COLOR`. It does not set `FORCE_COLOR`, replace agent launchers, or claim RGB support for every terminal. Color reporting is disabled until both colors are configured. The bridge becomes dormant when its original client stops selecting the pane or its view becomes ambiguous; it resumes for that same client and pane when they become eligible again. It does not promise that tmux clears a previously cached palette when the bridge closes.
 
-This project is experimental (v0.1). Automated tests use synthetic process, tmux, and Herdr responses; they do not prove compatibility with a live Herdr server, Mosh client, or terminal. Generic color behavior has not yet been verified in a live session.
+This project is experimental (v0.1). Automated tests use synthetic process, tmux, and Herdr responses; they do not prove compatibility with a live Herdr server, Mosh client, or terminal. See docs/testing.md for the scope of live verification.
 
 ## Requirements
 
@@ -31,6 +31,14 @@ To also enable the optional color profile, provide both colors. This sample pale
 python3 -B install.py local --host remote-box \
   --foreground '#ffffff' --background '#282c34' --dry-run
 ```
+
+Applications such as Pi derive their automatic theme from the first 16 ANSI
+colors as well as foreground and background. To preserve that appearance through
+Mosh, also pass `--palette-file /path/to/palette.json`. The file must contain a
+JSON array of exactly 16 `#RRGGBB` strings, in ANSI index order. Use colors captured
+from your actual local terminal. This option requires both foreground and
+background options. Omitting all color options preserves the installed profile.
+A later change to the local terminal theme requires updating this explicit profile.
 
 Review the proposed local paths. Then apply the same command with `--apply`:
 

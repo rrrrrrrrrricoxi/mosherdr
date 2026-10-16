@@ -259,6 +259,47 @@ class BridgeTests(unittest.TestCase):
         self.assertIsNone(bridge.process)
 
 
+class PanePaletteTests(unittest.TestCase):
+    def test_reports_ready_before_start_and_removes_own_array(self):
+        values = tuple("#%06x" % i for i in range(16))
+        owner = helper.PanePalette(TARGET, values)
+        rendered = "\n".join(f"pane-colours[{i}] {v}" for i, v in enumerate(values))
+        with mock.patch.object(helper, "tmux_read", side_effect=["", "pane-colours", "", rendered, ""]) as read:
+            owner.start()
+            self.assertEqual(owner.owned, dict(enumerate(values)))
+            owner.close()
+        self.assertEqual(read.call_args.args[1], ["set-option", "-pu", "-t", "%7", "pane-colours"])
+
+    def test_restores_preexisting_empty_local_array(self):
+        owner = helper.PanePalette(TARGET, ("#ffffff",))
+        with mock.patch.object(helper, "tmux_read", side_effect=["pane-colours", "pane-colours", "", "pane-colours[0] #ffffff", ""]) as read:
+            owner.start()
+            owner.close()
+        self.assertEqual(read.call_args.args[1], ["set-option", "-p", "-t", "%7", "pane-colours", ""])
+
+    def test_preserves_inherited_palette_without_shadowing(self):
+        owner = helper.PanePalette(TARGET, ("#ffffff",) * 16)
+        with mock.patch.object(helper, "tmux_read", return_value="pane-colours[200]* red") as read:
+            owner.start()
+            owner.close()
+        self.assertEqual(read.call_count, 2)
+
+    def test_preserves_later_user_change(self):
+        owner = helper.PanePalette(TARGET, ("#000000", "#ffffff"))
+        with mock.patch.object(helper, "tmux_read", side_effect=["", "pane-colours", "", "pane-colours[0] #112233\npane-colours[1] #ffffff", ""]) as read:
+            owner.start()
+            owner.close()
+        self.assertEqual(read.call_args.args[1][-1], "pane-colours[1]")
+
+    def test_partial_start_failure_can_be_cleaned(self):
+        owner = helper.PanePalette(TARGET, ("#000000", "#ffffff"))
+        with mock.patch.object(helper, "tmux_read", side_effect=["", "pane-colours", helper.CompatError("failed"), "pane-colours[0] #000000", ""]) as read:
+            with self.assertRaises(helper.CompatError):
+                owner.start()
+            owner.close()
+        self.assertEqual(read.call_args.args[1][-1], "pane-colours[0]")
+
+
 class ColorTests(unittest.TestCase):
     def test_rgb_validation_and_exact_default_reports(self):
         self.assertEqual(helper.rgb("#AbB2bF"), "#abb2bf")

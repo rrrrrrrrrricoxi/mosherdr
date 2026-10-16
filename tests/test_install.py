@@ -67,6 +67,17 @@ class InstallTests(unittest.TestCase):
             install.apply_plan(self.home, *self.plan(), dry_run=True)
         self.assertEqual(list(self.home.iterdir()), [])
 
+    def test_palette_profile_is_saved_by_plan_and_install(self):
+        palette = ["#%06x" % value for value in range(16)]
+        colors = {"enabled": True, "foreground": "#ffffff", "background": "#000000",
+                  "palette": palette}
+        planned = self.plan(colors=colors)
+        configuration = self.home / ".config/mosherdr/config.json"
+        planned_settings = json.loads(planned[0][configuration][0])
+        self.assertEqual(planned_settings["hosts"]["remote-box"]["colors"]["palette"], palette)
+        self.apply(planned)
+        self.assertEqual(json.loads(configuration.read_bytes())["hosts"]["remote-box"]["colors"], colors)
+
     def test_unrelated_shell_and_configuration_edits_are_preserved(self):
         self.apply()
         shell = self.home / ".zshrc"
@@ -457,6 +468,19 @@ class ArchiveTests(unittest.TestCase):
             manifest = json.load(packed.extractfile("MANIFEST.json"))
             self.assertEqual(manifest["source_commit"], COMMIT)
             self.assertEqual(manifest["files"]["agent.py"], install.digest(b"committed agent.py"))
+
+    def test_distribution_manifest_carries_explicit_palette(self):
+        palette = ["#%06x" % value for value in range(16)]
+        colors = {"enabled": True, "foreground": "#ffffff", "background": "#000000",
+                  "palette": palette}
+        def objects(source, commit, name=None):
+            if name is None:
+                return b""
+            return ("fixture " + name).encode()
+        with mock.patch.object(install, "git_bytes", side_effect=objects):
+            archive = install.distribution(Path("/fixture"), COMMIT, colors, False)
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as packed:
+            self.assertEqual(json.load(packed.extractfile("MANIFEST.json"))["colors"], colors)
 
     def test_transfer_uses_strict_batch_ssh_and_checks_source_before_and_after_packaging(self):
         with mock.patch.object(install, "clean_commit", side_effect=[COMMIT, COMMIT]) as clean, \
