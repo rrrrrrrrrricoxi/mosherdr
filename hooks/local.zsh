@@ -1,4 +1,4 @@
-# Observe one ordinary foreground connection; preserve mosh aliases/functions.
+# Observe one foreground Mosh connection; preserve mosh aliases/functions.
 # Capture the helper beside this sourced file, rather than the caller's cwd.
 typeset -g _mosherdr_helper="${${(%):-%N}:A:h:h}/agent.py"
 
@@ -24,7 +24,16 @@ function _mosherdr_preexec {
   [[ $1 != *$'\n'* && -r $_mosherdr_helper ]] || return 0
   local -a words
   words=("${(@z)1}")
-  [[ ${words[1]-} == mosh && ${words[2]-} =~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' ]] || return 0
+  local host
+  if [[ ${words[1]-} == mosh && ${words[2]-} =~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' ]]; then
+    host=${words[2]}
+  elif [[ ${words[1]-} == pi-ccc ]]; then
+    # Observe the launcher's connection from this outer Herdr shell. A nested
+    # shell has a different PID and cannot own this pane's verified watcher.
+    host=ccc
+  else
+    return 0
+  fi
   local word
   for word in "${words[@]}"; do
     case $word in
@@ -33,11 +42,11 @@ function _mosherdr_preexec {
   done
   local interpreter=${commands[python3]-}
   [[ -x $interpreter ]] || return 0
-  "$interpreter" -B "$_mosherdr_helper" configured --host "${words[2]}" \
+  "$interpreter" -B "$_mosherdr_helper" configured --host "$host" \
     </dev/null >/dev/null 2>&1 || return 0
   typeset -g _mosherdr_python=$interpreter
   typeset -g _mosherdr_source="custom:mosherdr.${$}.${RANDOM}.${RANDOM}"
-  "$interpreter" -B "$_mosherdr_helper" watch --host "${words[2]}" --shell-pid $$ \
+  "$interpreter" -B "$_mosherdr_helper" watch --host "$host" --shell-pid $$ \
     --source "$_mosherdr_source" \
     </dev/null >/dev/null 2>&1 &!
   typeset -g _mosherdr_monitor_pid=$!
