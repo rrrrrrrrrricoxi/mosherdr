@@ -4,7 +4,7 @@ mosherdr has two independent functions: agent badges and terminal-color compatib
 
 ## Agent badges
 
-The local interactive zsh hook watches ordinary foreground `mosh` commands for configured host aliases. It also recognizes the exact `pi-ccc` command name as a connection to configured host `ccc`. It records a unique Herdr report source for that connection. Both entry points use the outer Herdr shell PID and the same command filters and runtime checks. It preserves existing Mosh aliases and functions and does not wrap Mosh or agent commands. Re-sourcing the hook replaces only mosherdr's own hook entries.
+The local interactive zsh hook watches ordinary foreground `mosh` commands for configured host aliases. It records a unique Herdr report source for that connection. It preserves existing Mosh aliases and functions and does not wrap Mosh or agent commands. Re-sourcing the hook replaces only mosherdr's own hook entries.
 
 The local watcher uses Herdr's local API to confirm the pane, shell, and foreground connection. It reads local process identity and the Mosh client's argument vector to identify and pin the endpoint, then rechecks identity before accepting the result. The remote SSH probe matches the Mosh server's UDP socket to one attached tmux client and inspects foreground process metadata in that client's selected pane. It may inspect process arguments to identify supported agent launchers. These are bounded, read-only checks; mosherdr does not inspect terminal contents or prompts, and it does not log arguments, environment values, or credentials.
 

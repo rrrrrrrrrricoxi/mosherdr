@@ -654,10 +654,9 @@ class ShellHookTests(unittest.TestCase):
             code = (
                 "import json,os,signal,sys,time\n"
                 "mode=sys.argv[3]\n"
-                "if mode=='configured': sys.exit(0 if sys.argv[-1] in os.environ.get('HOOK_HOSTS','remote-box').split(',') else 1)\n"
+                "if mode=='configured': sys.exit(0 if sys.argv[-1]=='remote-box' else 1)\n"
                 "open(os.path.join(os.environ['HOOK_LOG'],mode),'w').write(json.dumps(sys.argv))\n"
                 "if mode=='watch':\n"
-                " open(os.path.join(os.environ['HOOK_LOG'],'watch-parent'),'w').write(str(os.getppid()))\n"
                 " def stop(*args):\n"
                 "  open(os.path.join(os.environ['HOOK_LOG'],'stopped'),'w').write('yes')\n"
                 "  sys.exit(0)\n"
@@ -713,29 +712,6 @@ class ShellHookTests(unittest.TestCase):
         files, output = self.hook("mosh remote-box")
         self.assertIn("watch", files)
         self.assertEqual(output, b"unset\n")
-
-    def test_pi_ccc_launcher_observes_ccc_from_outer_shell(self):
-        for line in ("pi-ccc", "pi-ccc --continue", "pi-ccc --model 'a model'"):
-            with self.subTest(line=line):
-                files, output = self.hook(line, {"HOOK_HOSTS": "ccc"})
-                self.assertEqual(output, b"unset\n")
-                watch = json.loads(files["watch"])
-                self.assertEqual(watch[watch.index("--host") + 1], "ccc")
-                self.assertEqual(watch[watch.index("--shell-pid") + 1], files["watch-parent"])
-                self.assertIn("stopped", files)
-
-    def test_pi_ccc_requires_configured_ccc_and_preserves_command_filters(self):
-        cases = [("pi-ccc", {}), ("pi-ccc", {"HOOK_HOSTS": "ccc", "HERDR_AGENT": ""}),
-                 ("pi-ccc; true", {"HOOK_HOSTS": "ccc"}),
-                 ("pi-ccc | cat", {"HOOK_HOSTS": "ccc"}),
-                 ("pi-ccc $(true)", {"HOOK_HOSTS": "ccc"}),
-                 ("pi-ccc\ntrue", {"HOOK_HOSTS": "ccc"}),
-                 ("other-pi-ccc", {"HOOK_HOSTS": "ccc"}),
-                 ("/tmp/pi-ccc", {"HOOK_HOSTS": "ccc"})]
-        for line, env in cases:
-            with self.subTest(line=line, env=env):
-                files, _ = self.hook(line, env)
-                self.assertEqual(files, {})
 
     def test_explicit_agent_other_host_and_compound_commands_do_not_spawn(self):
         cases = [("mosh remote-box", {"HERDR_AGENT": ""}), ("mosh remote-box", {"HERDR_ENV": "0"}),
